@@ -39,7 +39,7 @@ Go to './feature_extractor' and config 'config.yaml' before training. The traine
 ```
 python run.py
 ```
-You could use pretrained feature extractor: feature_extractor/model.pth.
+You could use pretrained feature extractor: feature_extractor/model.pth. The pre-trained models can be <a href="https://drive.google.com/file/d/1JHwLqxg0RTNjQZXHqcSYnmLWVXiErulJ/view?usp=drive_link">downloaded</a>. 
 
 ### (c) Constructing Graph
 Go to './feature_extractor' and build graphs from patches:
