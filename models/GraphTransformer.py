@@ -16,7 +16,7 @@ from .gcn import GCNBlock
 from torch_geometric.nn import GCNConv, DenseGraphConv, dense_mincut_pool
 from torch.nn import Linear
 class Classifier(nn.Module):
-    def __init__(self, n_class):
+    def __init__(self, n_class, n_features: int = 512):
         super(Classifier, self).__init__()
 
         self.embed_dim = 64
@@ -30,7 +30,7 @@ class Classifier(nn.Module):
         self.bn = 1
         self.add_self = 1
         self.normalize_embedding = 1
-        self.conv1 = GCNBlock(512,self.embed_dim,self.bn,self.add_self,self.normalize_embedding,0.,0)       # 64->128
+        self.conv1 = GCNBlock(n_features,self.embed_dim,self.bn,self.add_self,self.normalize_embedding,0.,0)       # 64->128
         self.pool1 = Linear(self.embed_dim, self.node_cluster_num)                                          # 100-> 20
 
 
@@ -55,13 +55,14 @@ class Classifier(nn.Module):
         if graphcam_flag:
             s_matrix = torch.argmax(s[0], dim=1)
             from os import path
-            torch.save(s_matrix, 'graphcam/s_matrix.pt')
-            torch.save(s[0], 'graphcam/s_matrix_ori.pt')
+            os.makedirs('graphcam', exist_ok=True)
+            torch.save(s_matrix, path.join('graphcam', 's_matrix.pt'))
+            torch.save(s[0], path.join('graphcam', 's_matrix_ori.pt'))
             
-            if path.exists('graphcam/att_1.pt'):
-                os.remove('graphcam/att_1.pt')
-                os.remove('graphcam/att_2.pt')
-                os.remove('graphcam/att_3.pt')
+            if path.exists(path.join('graphcam', 'att_1.pt')):
+                os.remove(path.join('graphcam', 'att_1.pt'))
+                os.remove(path.join('graphcam', 'att_2.pt'))
+                os.remove(path.join('graphcam', 'att_3.pt'))
     
         X, adj, mc1, o1 = dense_mincut_pool(X, adj, s, mask)
         b, _, _ = X.shape
@@ -79,10 +80,10 @@ class Classifier(nn.Module):
         if graphcam_flag:
             print('GraphCAM enabled')
             p = F.softmax(out)
-            torch.save(p, 'graphcam/prob.pt')
+            torch.save(p, path.join('graphcam', 'prob.pt'))
             index = np.argmax(out.cpu().data.numpy(), axis=-1)
 
-            for index_ in range(3):
+            for index_ in range(p.size(1)):
                 one_hot = np.zeros((1, out.size()[-1]), dtype=np.float32)
                 one_hot[0, index_] = out[0][index_]
                 one_hot_vector = one_hot
@@ -95,6 +96,6 @@ class Classifier(nn.Module):
                 cam = self.transformer.relprop(torch.tensor(one_hot_vector).to(X.device), method="transformer_attribution", is_ablation=False, 
                                             start_layer=0, **kwargs)
 
-                torch.save(cam, 'graphcam/cam_{}.pt'.format(index_))
+                torch.save(cam, path.join('graphcam', 'cam_{}.pt'.format(index_)))
 
         return pred,labels,loss

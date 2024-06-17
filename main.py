@@ -46,12 +46,12 @@ batch_size = args.batch_size
 
 if train:
     ids_train = open(args.train_set).readlines()
-    dataset_train = GraphDataset(os.path.join(data_path, ""), ids_train)
+    dataset_train = GraphDataset(os.path.join(data_path, ""), ids_train, site=args.site)
     dataloader_train = torch.utils.data.DataLoader(dataset=dataset_train, batch_size=batch_size, num_workers=10, collate_fn=collate, shuffle=True, pin_memory=True, drop_last=True)
     total_train_num = len(dataloader_train) * batch_size
 
 ids_val = open(args.val_set).readlines()
-dataset_val = GraphDataset(os.path.join(data_path, ""), ids_val)
+dataset_val = GraphDataset(os.path.join(data_path, ""), ids_val, site=args.site)
 dataloader_val = torch.utils.data.DataLoader(dataset=dataset_val, batch_size=batch_size, num_workers=10, collate_fn=collate, shuffle=False, pin_memory=True)
 total_val_num = len(dataloader_val) * batch_size
     
@@ -62,7 +62,7 @@ print("creating models......")
 num_epochs = args.num_epochs
 learning_rate = args.lr
 
-model = Classifier(n_class)
+model = Classifier(n_class, n_features=args.n_features)
 model = nn.DataParallel(model)
 if args.resume:
     print('load model{}'.format(args.resume))
@@ -86,7 +86,7 @@ if not test:
 trainer = Trainer(n_class)
 evaluator = Evaluator(n_class)
 
-best_pred = 0.0
+best_pred = None
 for epoch in range(num_epochs):
     # optimizer.zero_grad()
     model.train()
@@ -94,14 +94,14 @@ for epoch in range(num_epochs):
     total = 0.
 
     current_lr = optimizer.param_groups[0]['lr']
-    print('\n=>Epoches %i, learning rate = %.7f, previous best = %.4f' % (epoch+1, current_lr, best_pred))
+    print('\n=>Epoches %i, learning rate = %.7f' % (epoch+1, current_lr) + (', previous best = %.4f' % best_pred if (best_pred is not None) else ''))
 
     if train:
         for i_batch, sample_batched in enumerate(dataloader_train):
             #scheduler(optimizer, i_batch, epoch, best_pred)
             scheduler.step(epoch)
 
-            preds,labels,loss = trainer.train(sample_batched, model)
+            preds,labels,loss = trainer.train(sample_batched, model, n_features=args.n_features)
 
             optimizer.zero_grad()
             loss.backward()
@@ -132,7 +132,7 @@ for epoch in range(num_epochs):
 
             for i_batch, sample_batched in enumerate(dataloader_val):
                 #pred, label, _ = evaluator.eval_test(sample_batched, model)
-                preds, labels, _ = evaluator.eval_test(sample_batched, model, graphcam)
+                preds, labels, _ = evaluator.eval_test(sample_batched, model, graphcam, n_features=args.n_features)
                 
                 total += len(labels)
 
@@ -148,11 +148,11 @@ for epoch in range(num_epochs):
             # torch.cuda.empty_cache()
 
             val_acc = evaluator.get_scores()
-            if val_acc > best_pred: 
+            if (best_pred is None) or (val_acc > best_pred): 
                 best_pred = val_acc
                 if not test:
                     print("saving model...")
-                    torch.save(model.state_dict(), model_path + task_name + ".pth")
+                    torch.save(model.state_dict(), os.path.join(model_path, task_name + ".pth"))
 
             log = ""
             log = log + 'epoch [{}/{}] ------ acc: train = {:.4f}, val = {:.4f}'.format(epoch+1, num_epochs, trainer.get_scores(), evaluator.get_scores()) + "\n"
